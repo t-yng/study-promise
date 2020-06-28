@@ -17,42 +17,29 @@ const PromiseStatus = {
 
 class MyPromise<T> {
     private value?: T;
-    private resolved: boolean;
     private status: PromiseStatus;
     private fullfilledHandlers: ((value: T) => void)[];
 
     constructor(executor: Executor<T>) {
         this.status = PromiseStatus.PENDING;
-        this.resolved = false;
         this.fullfilledHandlers = [];
         executor(this.resolve.bind(this), this.reject.bind(this));
-    }
-
-    private handleFullFilled(): void {
-        let handler = this.fullfilledHandlers.shift();
-        while (handler != null) {
-            handler(this.value);
-            handler = this.fullfilledHandlers.shift();
-        }
-    }
-
-    private onFullfilled(fullfilledHandler: (value: T) => void) {
-        this.fullfilledHandlers.push(fullfilledHandler);
     }
 
     resolve(value: T | MyPromise<T>): void {
         if (value instanceof MyPromise) {
             value.then((v: T) => {
-                this.status = PromiseStatus.FULLFILLED
-                this.value = v;
-                this.handleFullFilled();
-                return v;
+                this.resolved(v);
             });
         } else {
-            this.status = PromiseStatus.FULLFILLED;
-            this.value = value;
-            this.handleFullFilled();
+            this.resolved(value);
         }
+    }
+
+    resolved(value: T): void {
+        this.status = PromiseStatus.FULLFILLED;
+        this.value = value;
+        this.handleFullFilled();
     }
 
     reject(error: Error): void {
@@ -82,6 +69,18 @@ class MyPromise<T> {
 
     private isFullfilled(): boolean {
         return this.status === PromiseStatus.FULLFILLED
+    }
+
+    private handleFullFilled(): void {
+        let handler = this.fullfilledHandlers.shift();
+        while (handler != null) {
+            handler(this.value);
+            handler = this.fullfilledHandlers.shift();
+        }
+    }
+
+    private onFullfilled(fullfilledHandler: (value: T) => void) {
+        this.fullfilledHandlers.push(fullfilledHandler);
     }
 }
 
