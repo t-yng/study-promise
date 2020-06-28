@@ -1,90 +1,107 @@
-type OnFullFilled = (v: any) => MyPromise | void;
-type OnRejected<T extends Error = Error> = (error: T) => MyPromise | void;
-type Executor = (onFullFilled: OnFullFilled, OnRejected?: OnRejected) => void;
-type PromiseStateType = 'pending' | 'resolved' | 'failed';
+/**
+ * Promiseの自前実装
+ * ECMAScriptの仕様は以下のリポジトリを参照
+ * @see: https://github.com/domenic/promises-unwrapping
+ */
 
-const PromiseState = {
+type OnFullFilled<T> = (value: T) => T | MyPromise<T>;
+type OnRejected<T extends Error = Error> = (error: T) => MyPromise<T> | void;
+type Executor<T> = (resolve: (value: T | MyPromise<T>) => void, reject?: (reason: any) => void) => void;
+type PromiseStatus = 'pending' | 'fullfilled' | 'rejected';
+
+const PromiseStatus = {
     PENDING: 'pending' as const,
-    RESOLVED: 'resolved' as const,
-    FAILED: 'failed' as const,
+    FULLFILLED: 'fullfilled' as const,
+    REJECTED: 'rejected' as const,
 };
 
-class MyPromise {
-    private resolved?: any;
-    private failed?: Error;
-    private state: PromiseStateType;
-    private fullFilledHandlers: OnFullFilled[];
-    private rejectedHandlers: OnRejected[];
+class MyPromise<T> {
+    private value?: T;
+    private resolved: boolean;
+    private status: PromiseStatus;
+    private fullfilledHandlers: ((value: T) => void)[];
 
-    constructor(executor: Executor) {
-        this.state = PromiseState.PENDING;
-        this.fullFilledHandlers = [];
-        this.rejectedHandlers = [];
+    constructor(executor: Executor<T>) {
+        this.status = PromiseStatus.PENDING;
+        this.resolved = false;
+        this.fullfilledHandlers = [];
         executor(this.resolve.bind(this), this.reject.bind(this));
     }
 
-    resolve(value: any): MyPromise {
-        this.state = PromiseState.RESOLVED;
-        this.resolved = value;
-        let onFullFilled = this.fullFilledHandlers.shift();
-        while(onFullFilled != null) {
-            try {
-                this.resolved = onFullFilled(this.resolved);
-            } catch (error) {
-                this.reject(error);
-                break;
-            }
-            onFullFilled = this.fullFilledHandlers.shift();
+    private handleFullFilled(): void {
+        let handler = this.fullfilledHandlers.shift();
+        while (handler != null) {
+            handler(this.value);
+            handler = this.fullfilledHandlers.shift();
         }
-        return this;
     }
 
-    reject(error: Error): MyPromise {
-        this.state = PromiseState.FAILED;
-        const handler = this.rejectedHandlers.shift();
-        if (handler != null) {
-            handler(error);
-        }
-        this.failed = error;
-        return this;
+    private onFullfilled(fullfilledHandler: (value: T) => void) {
+        this.fullfilledHandlers.push(fullfilledHandler);
     }
 
-    then(onFullFilled: OnFullFilled): MyPromise {
-        if (this.isResolved()) {
-            this.resolved = onFullFilled(this.resolved);
+    resolve(value: T | MyPromise<T>): void {
+        if (value instanceof MyPromise) {
+            value.then((v: T) => {
+                this.status = PromiseStatus.FULLFILLED
+                this.value = v;
+                this.handleFullFilled();
+                return v;
+            });
         } else {
-            this.fullFilledHandlers.push(onFullFilled);
+            this.status = PromiseStatus.FULLFILLED;
+            this.value = value;
+            this.handleFullFilled();
         }
-        return this;
     }
 
-    catch(onRejected: OnRejected): MyPromise {
-        if (this.isRejected()) {
-            onRejected(this.failed);
-        } else {
-            this.rejectedHandlers.push(onRejected);
+    reject(error: Error): void {
+        // TODO: implemented
+    }
+
+    /**
+     * Promiseがfullfilled状態になった時のコールバック関数を登録する
+     * @param onFullfilled
+     * @param onRejected
+     */
+    then<TResult = T>(onFullfilled: (value: T) => TResult | MyPromise<TResult>, onRejected?: OnRejected): MyPromise<TResult> {
+        if (this.isPending()) {
+            return new MyPromise<TResult>((resolve) => {
+                this.onFullfilled((v: T) => resolve(onFullfilled(this.value)));
+            });
+        } else if (this.isFullfilled()) {
+            return new MyPromise<TResult>((resolve) => {
+                resolve(onFullfilled(this.value));
+            });
         }
-        return this;
     }
 
-    private isResolved(): boolean {
-        return this.state === PromiseState.RESOLVED;
+    private isPending(): boolean {
+        return this.status === PromiseStatus.PENDING;
     }
 
-    private isRejected(): boolean {
-        return this.state === PromiseState.FAILED;
+    private isFullfilled(): boolean {
+        return this.status === PromiseStatus.FULLFILLED
     }
 }
 
-
-const p = new MyPromise((resolve, reject) => {
+const p = new MyPromise<number>((resolve, reject) => {
+    // resolve(2);
     setTimeout(() => resolve(1), 500);
 })
 
+p.then(v => {
+    console.log(v);
+    return v+ 1;
+});
+p.then(v => {
+    console.log(v);
+    return v+ 1;
+});
+
 p
+    .then(v => v + 1)
     .then(v => v + 1)
     .then(v => {
         console.log(v);
-        throw new Error('エラーが発生');
     })
-    .catch(error => console.log(error));
