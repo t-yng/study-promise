@@ -42,6 +42,12 @@ class MyPromise<T> {
         this.handleFullFilled();
     }
 
+    static resolve<T>(value: T): MyPromise<T> {
+        return new MyPromise<T>((resolve) => {
+            resolve(value);
+        });
+    }
+
     reject(error: Error): void {
         // TODO: implemented
     }
@@ -104,3 +110,7 @@ p
     .then(v => {
         console.log(v);
     })
+
+MyPromise.resolve(1)
+.then(v => v + 10)
+.then(v => console.log(v));
