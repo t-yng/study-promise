@@ -15,7 +15,7 @@ const PromiseStatus = {
     REJECTED: 'rejected' as const,
 };
 
-class MyPromise<T> {
+export class MyPromise<T> {
     private value?: T;
     private status: PromiseStatus;
     private fullfilledHandlers: ((value: T) => void)[];
@@ -89,28 +89,3 @@ class MyPromise<T> {
         this.fullfilledHandlers.push(fullfilledHandler);
     }
 }
-
-const p = new MyPromise<number>((resolve, reject) => {
-    // resolve(2);
-    setTimeout(() => resolve(1), 500);
-})
-
-p.then(v => {
-    console.log(v);
-    return v+ 1;
-});
-p.then(v => {
-    console.log(v);
-    return v+ 1;
-});
-
-p
-    .then(v => v + 1)
-    .then(v => v + 1)
-    .then(v => {
-        console.log(v);
-    })
-
-MyPromise.resolve(1)
-.then(v => v + 10)
-.then(v => console.log(v));
