@@ -1,9 +1,3 @@
-/**
- * Promiseの自前実装
- * ECMAScriptの仕様は以下のリポジトリを参照
- * @see: https://github.com/domenic/promises-unwrapping
- */
-
 type Executor<T> = (resolve: (value: T | MyPromise<T>) => void, reject?: (reason: any) => void) => void;
 type PromiseStatus = 'pending' | 'fullfilled' | 'rejected';
 
