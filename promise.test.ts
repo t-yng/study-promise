@@ -41,5 +41,36 @@ describe('MyPromiseのテスト', () => {
                 done();
             });
         });
-    })
+    });
+
+    describe('rejected', () => {
+        test('rejectが呼ばれた時にcatch()メソッドで登録したコールバックが呼ばれること', done => {
+            const p = new MyPromise((_resolve, reject) => {
+                setTimeout(() => {
+                    reject('error happen');
+                }, 100);
+            });
+            p
+            .catch(err => {
+                expect(err).toBe('error happen');
+                done();
+            });
+        });
+
+        test('then()メソッドのコールバックでエラーが発生した時にcatch()メソッドのコールバックが呼ばれること', done => {
+            const p = new MyPromise(resolve => {
+                setTimeout(() => {
+                    resolve(1);
+                }, 100);
+            });
+            p
+            .then(v => {
+                throw new Error('error happen');
+            })
+            .catch(err => {
+                expect(err.message).toBe('error happen');
+                done();
+            });
+        });
+    });
 });

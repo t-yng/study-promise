@@ -4,8 +4,6 @@
  * @see: https://github.com/domenic/promises-unwrapping
  */
 
-type OnFullFilled<T> = (value: T) => T | MyPromise<T>;
-type OnRejected<T extends Error = Error> = (error: T) => MyPromise<T> | void;
 type Executor<T> = (resolve: (value: T | MyPromise<T>) => void, reject?: (reason: any) => void) => void;
 type PromiseStatus = 'pending' | 'fullfilled' | 'rejected';
 
@@ -17,12 +15,15 @@ const PromiseStatus = {
 
 export class MyPromise<T> {
     private value?: T;
+    private reason?: any;
     private status: PromiseStatus;
     private fullfilledHandlers: ((value: T) => void)[];
+    private rejectedHandlers: ((reason?: any) => void)[];
 
     constructor(executor: Executor<T>) {
         this.status = PromiseStatus.PENDING;
         this.fullfilledHandlers = [];
+        this.rejectedHandlers = [];
         executor(this.resolve.bind(this), this.reject.bind(this));
     }
 
@@ -48,8 +49,10 @@ export class MyPromise<T> {
         });
     }
 
-    reject(error: Error): void {
-        // TODO: implemented
+    reject(reason: any): void {
+        this.status = PromiseStatus.REJECTED;
+        this.reason = reason;
+        this.handleRejected();
     }
 
     /**
@@ -57,14 +60,49 @@ export class MyPromise<T> {
      * @param onFullfilled
      * @param onRejected
      */
-    then<TResult = T>(onFullfilled: (value: T) => TResult | MyPromise<TResult>, onRejected?: OnRejected): MyPromise<TResult> {
+    then<TResult = T>(
+        onFullfilled: (value: T) => TResult | MyPromise<TResult>,
+        onRejected?: (reason?: any) => TResult | MyPromise<TResult>
+    ): MyPromise<TResult> {
         if (this.isPending()) {
-            return new MyPromise<TResult>((resolve) => {
-                this.onFullfilled((v: T) => resolve(onFullfilled(this.value)));
+            return new MyPromise<TResult>((resolve, reject) => {
+                this.onFullfilled((v: T) => {
+                    try {
+                        resolve(onFullfilled(this.value));
+                    } catch (err) {
+                        reject(err);
+                    }
+                });
             });
         } else if (this.isFullfilled()) {
-            return new MyPromise<TResult>((resolve) => {
-                resolve(onFullfilled(this.value));
+            return new MyPromise<TResult>((resolve, reject) => {
+                try {
+                    resolve(onFullfilled(this.value));
+                } catch(err) {
+                    reject(err);
+                }
+            });
+        }
+    }
+
+    catch<TResult = T>(onRejected: (reason?: any) => TResult | MyPromise<TResult>): MyPromise<TResult> {
+        if (this.isPending()) {
+            return new MyPromise<TResult>((resolve, reject) => {
+                this.onRejected((reason?: any) => {
+                    try {
+                        resolve(onRejected(reason));
+                    } catch (err) {
+                        reject(err);
+                    }
+                });
+            });
+        } else if (this.isRejected()) {
+            return new MyPromise<TResult>((resolve, reject) => {
+                try {
+                    resolve(onRejected(this.reason));
+                } catch (err) {
+                    reject(err);
+                }
             });
         }
     }
@@ -77,6 +115,10 @@ export class MyPromise<T> {
         return this.status === PromiseStatus.FULLFILLED
     }
 
+    private isRejected(): boolean {
+        return this.status === PromiseStatus.REJECTED
+    }
+
     private handleFullFilled(): void {
         let handler = this.fullfilledHandlers.shift();
         while (handler != null) {
@@ -85,7 +127,19 @@ export class MyPromise<T> {
         }
     }
 
+    private handleRejected(): void {
+        let handler = this.rejectedHandlers.shift();
+        while (handler != null) {
+            handler(this.reason);
+            handler = this.rejectedHandlers.shift();
+        }
+    }
+
     private onFullfilled(fullfilledHandler: (value: T) => void) {
         this.fullfilledHandlers.push(fullfilledHandler);
+    }
+
+    private onRejected(rejectedHandler: (reason?: any) => void) {
+        this.rejectedHandlers.push(rejectedHandler);
     }
 }
